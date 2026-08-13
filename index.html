@@ -3422,17 +3422,18 @@ const STORAGE_KEY = 'sua_planificateur_v1';
 
 function saveToStorage() {
   try {
+    const g = id => (document.getElementById(id) || {}).value || '';
     const data = {
       version: 1,
       savedAt: new Date().toISOString(),
       coaches: coaches,
       seances: seances,
       semaine: {
-        numero: document.getElementById('s-numero').value,
-        theme: document.getElementById('s-theme').value,
-        staff: document.getElementById('s-staff').value,
-        points: document.getElementById('s-points').value,
-        divers: (document.getElementById('s-divers') || {}).value || ''
+        numero: g('s-numero'),
+        theme:  g('s-theme'),
+        staff:  g('s-staff'),
+        points: g('s-points'),
+        divers: g('s-divers')
       },
       mediaStore: mediaStore
     };
@@ -3447,36 +3448,32 @@ function saveToStorage() {
 function loadFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return false;
+    if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || data.version !== 1) return false;
+    if (!data || data.version !== 1) return null;
 
-    // Restaurer coaches
+    // Restaurer coaches et séances AVANT render()
     if (Array.isArray(data.coaches)) coaches = data.coaches;
-
-    // Restaurer séances
     if (Array.isArray(data.seances)) seances = data.seances;
-
-    // Restaurer médias
     if (data.mediaStore && typeof data.mediaStore === 'object') mediaStore = data.mediaStore;
 
-    // Restaurer champs semaine (après render)
-    if (data.semaine) {
-      requestAnimationFrame(() => {
-        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-        set('s-numero', data.semaine.numero);
-        set('s-theme', data.semaine.theme);
-        set('s-staff', data.semaine.staff);
-        set('s-points', data.semaine.points);
-        set('s-divers', data.semaine.divers);
-        if (data.semaine.numero) updateSemaineNum();
-      });
-    }
-    return true;
+    // Retourner les données semaine pour les appliquer APRÈS render()
+    return data.semaine || null;
   } catch(e) {
     console.warn('Chargement échoué:', e);
-    return false;
+    return null;
   }
+}
+
+function applySemaineFields(semaine) {
+  if (!semaine) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('s-numero', semaine.numero);
+  set('s-theme', semaine.theme);
+  set('s-staff', semaine.staff);
+  set('s-points', semaine.points);
+  set('s-divers', semaine.divers);
+  updateSemaineNum();
 }
 
 function clearStorage() {
@@ -3509,13 +3506,16 @@ function scheduleSave() {
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
-// Charger les données sauvegardées, puis rendre
-const _restored = loadFromStorage();
-render();
-// Si restauré, re-rendre pour appliquer coaches
-if (_restored) { render(); }
+// 1. Charger coaches + séances + médias depuis localStorage
+const _savedSemaine = loadFromStorage();
 
-// Auto-save sur les champs semaine
+// 2. Rendre l'interface (avec les données restaurées)
+render();
+
+// 3. Appliquer les champs texte semaine (après que le DOM existe)
+applySemaineFields(_savedSemaine);
+
+// 4. Auto-save sur les champs semaine
 ['s-numero','s-theme','s-staff','s-points','s-divers'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('input', scheduleSave);
