@@ -994,8 +994,10 @@ Mettre du plaquage</textarea>
       <div class="sidebar-label">Export</div>
       <p style="font-size:12px; color:var(--mid-gray); line-height:1.5;">
         Le PPTX inclut une slide de thème + une slide planning + une slide groupes par séance.<br><br>
-        Les horaires se calculent automatiquement selon la durée de chaque bloc.
+        Les horaires se calculent automatiquement selon la durée de chaque bloc.<br><br>
+        <span style="color:rgba(197,150,58,0.8);">💾 Les données sont sauvegardées automatiquement dans ce navigateur.</span>
       </p>
+      <button class="btn btn-sm btn-danger" onclick="clearStorage()" style="width:100%;margin-top:8px;">🗑 Effacer toutes les données</button>
     </div>
   </div>
 
@@ -2457,13 +2459,19 @@ Mettre du plaquage</textarea>
       <div id="mp-meta" class="media-meta" style="display:none;"></div>
 
       <!-- Drop zone (shown when no media) -->
-      <div class="media-dropzone" id="mp-dropzone">
-        <input type="file" id="mp-file-input" accept="image/*,video/*" onchange="handleFileUpload(event)">
-        <div class="media-dropzone-icon">📂</div>
-        <div class="media-dropzone-text">
-          <strong>Glisser ou cliquer pour importer</strong>
-          Images : JPG, PNG, GIF, WebP<br>
-          Vidéos : MP4, MOV, WebM
+      <!-- Bouton upload direct -->
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label for="mp-file-input" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:var(--gold);color:var(--navy-dark);border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:0.5px;text-transform:uppercase;transition:background 0.15s;">
+          📁 Choisir un fichier (image ou vidéo)
+        </label>
+        <input type="file" id="mp-file-input" accept="image/*,video/*" onchange="handleFileUpload(event)" style="display:none;">
+        <div class="media-dropzone" id="mp-dropzone" style="margin-top:0;">
+          <div class="media-dropzone-icon">🖼</div>
+          <div class="media-dropzone-text">
+            <strong>Ou glisser-déposer ici</strong>
+            Images : JPG, PNG, GIF, WebP<br>
+            Vidéos : MP4, MOV, WebM
+          </div>
         </div>
       </div>
 
@@ -2616,12 +2624,14 @@ function addCoach() {
     inp.value = '';
     renderCoachSidebar();
     render();
+    scheduleSave();
   }
 }
 function removeCoach(i) {
   coaches.splice(i, 1);
   renderCoachSidebar();
   render();
+  scheduleSave();
 }
 document.getElementById('new-coach-name').addEventListener('keydown', e => {
   if (e.key === 'Enter') addCoach();
@@ -2886,32 +2896,37 @@ function renderGroupes(s, idx) {
 function addBloc(si) {
   seances[si].blocs.push({ situation: "Nouveau bloc", dureeMin: 15, recuperationMin: 0, rotation: false, ateliers: [{ texte: "", coaches: [] }] });
   renderSeance();
+  scheduleSave();
 }
 function deleteBloc(si, bi) {
   seances[si].blocs.splice(bi, 1);
   renderSeance();
+  scheduleSave();
 }
 function moveBloc(si, bi, dir) {
   const arr = seances[si].blocs;
   const tmp = arr[bi]; arr[bi] = arr[bi+dir]; arr[bi+dir] = tmp;
   renderSeance();
+  scheduleSave();
 }
 function addAtelier(si, bi) {
   if (!seances[si].blocs[bi].ateliers) seances[si].blocs[bi].ateliers = [];
   seances[si].blocs[bi].ateliers.push({ texte: "", coaches: [] });
   renderSeance();
+  scheduleSave();
 }
 function removeAtelier(si, bi, ai) {
   seances[si].blocs[bi].ateliers.splice(ai, 1);
   renderSeance();
+  scheduleSave();
 }
 function toggleAtelierCoach(si, bi, ai, coach) {
   const atelier = seances[si].blocs[bi].ateliers[ai];
   if (!atelier.coaches) atelier.coaches = [];
   const idx = atelier.coaches.indexOf(coach);
   if (idx >= 0) atelier.coaches.splice(idx, 1); else atelier.coaches.push(coach);
-  // Re-render just the chips without full re-render to avoid losing focus
   renderSeance();
+  scheduleSave();
 }
 function addSeance() {
   seances.push({
@@ -2921,11 +2936,13 @@ function addSeance() {
   });
   activeSeanceIdx = seances.length - 1;
   render();
+  scheduleSave();
 }
 function deleteSeance(i) {
   seances.splice(i, 1);
   activeSeanceIdx = Math.min(activeSeanceIdx, seances.length-1);
   render();
+  scheduleSave();
 }
 function addGroupes(si) {
   seances[si].groupes = { cols: ["G1","G2"], joueuses: Array(10).fill(null).map(()=>["",""]) };
@@ -3319,6 +3336,7 @@ function handleFileUpload(event) {
     };
     refreshMediaPanel();
     renderSeance(); // update badges
+    scheduleSave();
   };
   reader.readAsDataURL(file);
   event.target.value = ''; // reset so same file can be re-selected
@@ -3330,6 +3348,7 @@ function handleUrlMedia() {
   mediaStore[activeBlocKey] = { type: 'url', data: url, name: url };
   refreshMediaPanel();
   renderSeance();
+  scheduleSave();
 }
 
 function removeMedia() {
@@ -3337,6 +3356,7 @@ function removeMedia() {
   delete mediaStore[activeBlocKey];
   refreshMediaPanel();
   renderSeance();
+  scheduleSave();
 }
 
 // Drag & drop on dropzone
@@ -3361,6 +3381,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
       refreshMediaPanel();
       renderSeance();
+      scheduleSave();
     };
     reader.readAsDataURL(file);
   });
@@ -3395,8 +3416,111 @@ function buildDatalist() {
   dl.innerHTML = names.map(n => `<option value="${n.replace(/"/g,'&quot;')}"></option>`).join('');
 }
 
+
+// ─── SAUVEGARDE PERSISTANTE ───────────────────────────────────────────────────
+const STORAGE_KEY = 'sua_planificateur_v1';
+
+function saveToStorage() {
+  try {
+    const data = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      coaches: coaches,
+      seances: seances,
+      semaine: {
+        numero: document.getElementById('s-numero').value,
+        theme: document.getElementById('s-theme').value,
+        staff: document.getElementById('s-staff').value,
+        points: document.getElementById('s-points').value,
+        divers: (document.getElementById('s-divers') || {}).value || ''
+      },
+      mediaStore: mediaStore
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    showSaveIndicator();
+  } catch(e) {
+    console.warn('Sauvegarde impossible (quota dépassé ?):', e);
+    showSaveIndicator(true);
+  }
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || data.version !== 1) return false;
+
+    // Restaurer coaches
+    if (Array.isArray(data.coaches)) coaches = data.coaches;
+
+    // Restaurer séances
+    if (Array.isArray(data.seances)) seances = data.seances;
+
+    // Restaurer médias
+    if (data.mediaStore && typeof data.mediaStore === 'object') mediaStore = data.mediaStore;
+
+    // Restaurer champs semaine (après render)
+    if (data.semaine) {
+      requestAnimationFrame(() => {
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        set('s-numero', data.semaine.numero);
+        set('s-theme', data.semaine.theme);
+        set('s-staff', data.semaine.staff);
+        set('s-points', data.semaine.points);
+        set('s-divers', data.semaine.divers);
+        if (data.semaine.numero) updateSemaineNum();
+      });
+    }
+    return true;
+  } catch(e) {
+    console.warn('Chargement échoué:', e);
+    return false;
+  }
+}
+
+function clearStorage() {
+  if (!confirm('Effacer toutes les données sauvegardées ? Cette action est irréversible.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+function showSaveIndicator(error = false) {
+  let el = document.getElementById('save-indicator');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'save-indicator';
+    el.style.cssText = 'position:fixed;bottom:16px;right:16px;padding:8px 14px;border-radius:6px;font-size:12px;font-family:Barlow,sans-serif;font-weight:700;z-index:9999;transition:opacity 0.5s;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent = error ? '⚠ Sauvegarde impossible' : '✓ Sauvegardé';
+  el.style.background = error ? '#C0392B' : '#2E7D52';
+  el.style.color = 'white';
+  el.style.opacity = '1';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.opacity = '0'; }, 2000);
+}
+
+// Auto-sauvegarde : debounce 800ms après chaque modification
+let _saveTimer = null;
+function scheduleSave() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveToStorage, 800);
+}
+
 // ─── INIT ────────────────────────────────────────────────────────────────────
+// Charger les données sauvegardées, puis rendre
+const _restored = loadFromStorage();
 render();
+// Si restauré, re-rendre pour appliquer coaches
+if (_restored) { render(); }
+
+// Auto-save sur les champs semaine
+['s-numero','s-theme','s-staff','s-points','s-divers'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', scheduleSave);
+});
+
 </script><datalist id="joueuses-datalist"><option value="Alana"></option><option value="Alicia"></option><option value="Aliénor"></option><option value="Anwen"></option><option value="Appoline"></option><option value="Chloé"></option><option value="Clea"></option><option value="Cléa"></option><option value="Elina"></option><option value="Elisa"></option><option value="Eloa"></option><option value="Emma"></option><option value="Eva"></option><option value="Evi"></option><option value="Jenyfer"></option><option value="Juliette"></option><option value="Keyla"></option><option value="Lana"></option><option value="Lena"></option><option value="Lise"></option><option value="Louna"></option><option value="Luna"></option><option value="Madeline"></option><option value="Maeva"></option><option value="Manon"></option><option value="Margot"></option><option value="Marine"></option><option value="Mayra"></option><option value="Mélina"></option><option value="Mia"></option><option value="Nina"></option><option value="Ninon"></option><option value="Noémie"></option><option value="Perrine"></option><option value="Philomène"></option><option value="Salomé"></option><option value="Typhaine"></option></datalist>
 
 
