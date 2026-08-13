@@ -664,9 +664,7 @@
     border-color: var(--gold);
     background: rgba(197,150,58,0.08);
   }
-  .media-dropzone input[type=file] {
-    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-  }
+  /* input[type=file] géré directement dans le label */
   .media-dropzone-icon { font-size: 32px; margin-bottom: 8px; }
   .media-dropzone-text {
     font-size: 12px;
@@ -2459,14 +2457,14 @@ Mettre du plaquage</textarea>
       <div id="mp-meta" class="media-meta" style="display:none;"></div>
 
       <!-- Drop zone (shown when no media) -->
-      <!-- Bouton upload direct -->
+      <!-- Bouton upload direct : input DANS le label pour compatibilité maximale -->
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <label for="mp-file-input" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:var(--gold);color:var(--navy-dark);border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:0.5px;text-transform:uppercase;transition:background 0.15s;">
-          📁 Choisir un fichier (image ou vidéo)
+        <label id="mp-upload-label" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:var(--gold);color:var(--navy-dark);border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:0.5px;text-transform:uppercase;transition:background 0.15s;user-select:none;" onmouseover="this.style.background='var(--gold-light)'" onmouseout="this.style.background='var(--gold)'">
+          📁 Choisir image ou vidéo
+          <input type="file" id="mp-file-input" accept="image/*,video/*" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;" onchange="handleFileUpload(event)">
         </label>
-        <input type="file" id="mp-file-input" accept="image/*,video/*" onchange="handleFileUpload(event)" style="display:none;">
         <div class="media-dropzone" id="mp-dropzone" style="margin-top:0;">
-          <div class="media-dropzone-icon">🖼</div>
+          <div class="media-dropzone-icon">🖽</div>
           <div class="media-dropzone-text">
             <strong>Ou glisser-déposer ici</strong>
             Images : JPG, PNG, GIF, WebP<br>
@@ -2597,11 +2595,20 @@ function minutesToTime(mins) {
   const m = mins % 60;
   return `${h}h${m.toString().padStart(2,'0')}`;
 }
+function getBlocDuree(b) {
+  // En mode rotation : durée = somme des durées par atelier
+  if (b.rotation) {
+    const sum = (b.ateliers || []).reduce((acc, a) => acc + (parseInt(a.dureeAtelier) || 0), 0);
+    return sum || (b.dureeMin || 0); // fallback si aucun atelier n'a de durée
+  }
+  return b.dureeMin || 0;
+}
+
 function calcHeures(seance) {
   let cursor = timeToMinutes(seance.heureDebut);
   return seance.blocs.map(b => {
     const t = minutesToTime(cursor);
-    cursor += (b.dureeMin || 0) + (b.recuperationMin || 0);
+    cursor += getBlocDuree(b) + (b.recuperationMin || 0);
     return t;
   });
 }
@@ -2662,7 +2669,7 @@ function renderSeance() {
   const s = seances[activeSeanceIdx];
   const idx = activeSeanceIdx;
   const heures = calcHeures(s);
-  const totalMin = s.blocs.reduce((a,b) => a + (b.dureeMin||0) + (b.recuperationMin||0), 0);
+  const totalMin = s.blocs.reduce((a,b) => a + getBlocDuree(b) + (b.recuperationMin||0), 0);
   const heureFinMin = timeToMinutes(s.heureDebut) + totalMin;
   const heureFin = minutesToTime(heureFinMin);
 
@@ -2736,15 +2743,25 @@ function renderBloc(s, seanceIdx, b, bi, heure) {
         ${c}
       </span>
     `).join('');
+    // Durée par atelier (visible uniquement en mode rotation)
+    const dureeAtelierRow = b.rotation ? `
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:4px;">
+        <span style="font-size:10px;font-weight:700;color:var(--navy-light);text-transform:uppercase;letter-spacing:0.5px;min-width:52px;">⏱ Durée :</span>
+        <input type="number" min="0" max="60" value="${a.dureeAtelier||0}"
+          style="width:52px;text-align:center;font-weight:700;padding:3px 4px;"
+          oninput="seances[${seanceIdx}].blocs[${bi}].ateliers[${ai}].dureeAtelier=parseInt(this.value)||0; renderSeance();">
+        <span style="font-size:11px;color:var(--mid-gray);">min</span>
+      </div>` : '';
     return `
-      <div style="margin-bottom:8px; padding:6px 8px; background:rgba(26,43,107,0.04); border-radius:6px; border-left:3px solid var(--gold);">
+      <div style="margin-bottom:8px; padding:6px 8px; background:rgba(26,43,107,0.04); border-radius:6px; border-left:3px solid ${b.rotation ? 'var(--navy-light)' : 'var(--gold)'};">
         <div class="atelier-row">
-          <span class="atelier-label">Atelier ${ai+1}</span>
+          <span class="atelier-label">${b.rotation ? '↻' : ''} Atelier ${ai+1}</span>
           <input type="text" value="${(a.texte||'').replace(/"/g, '&quot;')}"
             oninput="seances[${seanceIdx}].blocs[${bi}].ateliers[${ai}].texte=this.value;">
           <button onclick="removeAtelier(${seanceIdx},${bi},${ai})"
             style="background:none;border:none;cursor:pointer;color:var(--mid-gray);font-size:14px;padding:2px 6px;" title="Supprimer">✕</button>
         </div>
+        ${dureeAtelierRow}
         <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-left:4px;">
           <span style="font-size:10px;font-weight:700;color:var(--mid-gray);text-transform:uppercase;letter-spacing:0.5px;min-width:52px;">Coachs :</span>
           <div style="display:flex;flex-wrap:wrap;gap:3px;">${coachChips}</div>
@@ -2774,9 +2791,14 @@ function renderBloc(s, seanceIdx, b, bi, heure) {
         <div class="atelier-row" style="margin-bottom:4px;">
           <span class="atelier-label" style="color:var(--navy-light);">Durée</span>
           <div class="duration-wrap" style="flex:1;">
-            <input type="number" min="0" max="180" value="${b.dureeMin}"
-              oninput="seances[${seanceIdx}].blocs[${bi}].dureeMin=parseInt(this.value)||0; renderSeance();">
-            <span>min</span>
+            ${b.rotation
+              ? `<input type="number" value="${getBlocDuree(b)}" disabled
+                  style="width:52px;text-align:center;font-weight:700;background:#eef2fb;color:var(--navy);border-color:var(--light-gray);cursor:not-allowed;" title="Calculé automatiquement (somme des ateliers)">
+                 <span style="font-size:10px;color:var(--navy-light);font-style:italic;">auto</span>`
+              : `<input type="number" min="0" max="180" value="${b.dureeMin}"
+                  oninput="seances[${seanceIdx}].blocs[${bi}].dureeMin=parseInt(this.value)||0; renderSeance();">
+                 <span>min</span>`
+            }
           </div>
         </div>
         <div class="atelier-row" style="margin-bottom:4px;">
@@ -3099,12 +3121,15 @@ async function exportPPTX() {
 
         // Situation + durée
         const recup = bloc.recuperationMin || 0;
+        const blocDuree = bloc.rotation
+          ? (bloc.ateliers || []).reduce((acc, a) => acc + (parseInt(a.dureeAtelier)||0), 0) || (bloc.dureeMin||0)
+          : (bloc.dureeMin || 0);
         const rotText = bloc.rotation ? '↻ Rotation' : '';
         const recupText = recup > 0 ? `+${recup}' récup` : '';
         const subLine = [rotText, recupText].filter(Boolean).join('  ·  ');
         sp.addText([
           {text:bloc.situation, options:{bold:true, breakLine:true}},
-          {text:`${bloc.dureeMin} min`, options:{color:C.navyDark, fontSize:fs-1, bold:false}},
+          {text:`${blocDuree} min`, options:{color:C.navyDark, fontSize:fs-1, bold:false}},
           ...(subLine ? [{text:'  ' + subLine, options:{color:C.green, fontSize:fs-2, italic:true}}] : [])
         ], { x:tableX+COLS[0].w, y:ry, w:COLS[1].w, h:rowH, fontSize:fs, color:C.navyDark, fontFace:"Calibri", align:"center", valign:"middle", margin:[0,0.06,0,0.06] });
 
@@ -3112,8 +3137,9 @@ async function exportPPTX() {
         const ateliers = (bloc.ateliers||[]).map(a => typeof a === 'string' ? {texte:a, coaches:[]} : a);
         const atelierItems = ateliers.filter(a => a.texte).flatMap((a, ai, arr) => {
           const coachStr = (a.coaches||[]).length > 0 ? ` — ${a.coaches.join(', ')}` : '';
+          const dureeStr = bloc.rotation && a.dureeAtelier ? ` (${a.dureeAtelier} min)` : '';
           return [
-            {text: `Atelier ${ai+1}  `, options:{bold:true, color:C.gold, fontSize:fs-1}},
+            {text: `${bloc.rotation ? '↻ ' : ''}Atelier ${ai+1}${dureeStr}  `, options:{bold:true, color:bloc.rotation ? C.navyLight : C.gold, fontSize:fs-1}},
             {text: a.texte, options:{color:"222222"}},
             ...(coachStr ? [{text: coachStr, options:{color:C.navyLight, fontSize:fs-1, italic:true}}] : []),
             ...(ai < arr.length-1 ? [{text:'', options:{breakLine:true}}] : [])
