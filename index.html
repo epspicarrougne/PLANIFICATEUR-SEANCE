@@ -2739,12 +2739,22 @@ function renderBloc(s, seanceIdx, b, bi, heure) {
   );
 
   const atelierRows = ateliers.map((a, ai) => {
-    const coachChips = coaches.map(c => `
-      <span class="atelier-coach-chip ${(a.coaches||[]).includes(c) ? 'active' : ''}"
-        onclick="toggleAtelierCoach(${seanceIdx},${bi},${ai},'${c}')">
-        ${c}
-      </span>
-    `).join('');
+    const coachChips = coaches.map(c => {
+      const isActive = (a.coaches||[]).includes(c);
+      const mission = (a.coachMissions && a.coachMissions[c]) || '';
+      const missionField = isActive ? `
+        <div style="display:flex;align-items:center;gap:4px;margin-top:3px;padding-left:2px;">
+          <span style="font-size:9px;color:var(--mid-gray);min-width:44px;">↳ ${c} :</span>
+          <input type="text" value="${mission.replace(/"/g,'&quot;')}" placeholder="Mission…"
+            style="flex:1;font-size:10px;padding:2px 5px;border-radius:3px;border:1px solid rgba(197,150,58,0.3);background:rgba(197,150,58,0.05);color:var(--navy);"
+            oninput="setCoachMission(${seanceIdx},${bi},${ai},'${c}',this.value)">
+        </div>` : '';
+      return `
+        <span class="atelier-coach-chip ${isActive ? 'active' : ''}"
+          onclick="toggleAtelierCoach(${seanceIdx},${bi},${ai},'${c}')">
+          ${c}
+        </span>${missionField}`;
+    }).join('');
     // Durée par atelier (visible uniquement en mode rotation)
     const dureeAtelierRow = b.rotation ? `
       <div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:4px;">
@@ -2764,8 +2774,10 @@ function renderBloc(s, seanceIdx, b, bi, heure) {
             style="background:none;border:none;cursor:pointer;color:var(--mid-gray);font-size:14px;padding:2px 6px;" title="Supprimer">✕</button>
         </div>
         ${dureeAtelierRow}
-        <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-left:4px;">
-          <span style="font-size:10px;font-weight:700;color:var(--mid-gray);text-transform:uppercase;letter-spacing:0.5px;min-width:52px;">Coachs :</span>
+        <div style="margin-top:5px;padding-left:4px;">
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+            <span style="font-size:10px;font-weight:700;color:var(--mid-gray);text-transform:uppercase;letter-spacing:0.5px;">Coachs :</span>
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:3px;">${coachChips}</div>
         </div>
       </div>
@@ -2948,6 +2960,13 @@ function removeAtelier(si, bi, ai) {
   renderSeance();
   scheduleSave();
 }
+function setCoachMission(si, bi, ai, coach, val) {
+  if (!seances[si].blocs[bi].ateliers[ai].coachMissions)
+    seances[si].blocs[bi].ateliers[ai].coachMissions = {};
+  seances[si].blocs[bi].ateliers[ai].coachMissions[coach] = val;
+  scheduleSave();
+}
+
 function toggleAtelierCoach(si, bi, ai, coach) {
   const atelier = seances[si].blocs[bi].ateliers[ai];
   if (!atelier.coaches) atelier.coaches = [];
@@ -3142,12 +3161,15 @@ async function exportPPTX() {
         // Ateliers avec coachs intégrés par ligne
         const ateliers = (bloc.ateliers||[]).map(a => typeof a === 'string' ? {texte:a, coaches:[]} : a);
         const atelierItems = ateliers.filter(a => a.texte).flatMap((a, ai, arr) => {
-          const coachStr = (a.coaches||[]).length > 0 ? ` — ${a.coaches.join(', ')}` : '';
           const dureeStr = bloc.rotation && a.dureeAtelier ? ` (${a.dureeAtelier} min)` : '';
+          const coachLines = (a.coaches||[]).flatMap(c => {
+            const mission = a.coachMissions && a.coachMissions[c] ? ` : ${a.coachMissions[c]}` : '';
+            return [{text: `  ↳ ${c}${mission}`, options:{color:C.navyLight, fontSize:fs-2, italic:true, breakLine:true}}];
+          });
           return [
             {text: `${bloc.rotation ? '↻ ' : ''}Atelier ${ai+1}${dureeStr}  `, options:{bold:true, color:bloc.rotation ? C.navyLight : C.gold, fontSize:fs-1}},
-            {text: a.texte, options:{color:"222222"}},
-            ...(coachStr ? [{text: coachStr, options:{color:C.navyLight, fontSize:fs-1, italic:true}}] : []),
+            {text: a.texte, options:{color:"222222", breakLine: coachLines.length > 0}},
+            ...coachLines,
             ...(ai < arr.length-1 ? [{text:'', options:{breakLine:true}}] : [])
           ];
         });
