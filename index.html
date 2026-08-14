@@ -2457,14 +2457,14 @@ Mettre du plaquage</textarea>
       <div id="mp-meta" class="media-meta" style="display:none;"></div>
 
       <!-- Drop zone (shown when no media) -->
-      <!-- Bouton upload direct : input DANS le label pour compatibilité maximale -->
+      <!-- Bouton upload : label enveloppant l'input, aucun JS requis -->
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <input type="file" id="mp-file-input" accept="image/*,video/*" onchange="handleFileUpload(event)" style="display:none;">
-        <button onclick="document.getElementById('mp-file-input').click();"
-          style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:var(--gold);color:var(--navy-dark);border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:0.5px;text-transform:uppercase;border:none;width:100%;transition:background 0.15s;"
+        <label for="mp-file-input"
+          style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:var(--gold);color:var(--navy-dark);border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:0.5px;text-transform:uppercase;width:100%;box-sizing:border-box;"
           onmouseover="this.style.background='var(--gold-light)'" onmouseout="this.style.background='var(--gold)'">
           📁 Choisir image ou vidéo
-        </button>
+        </label>
+        <input type="file" id="mp-file-input" accept="image/*,video/*" onchange="handleFileUpload(event)" style="position:absolute;left:-9999px;width:1px;height:1px;">
         <div class="media-dropzone" id="mp-dropzone" style="margin-top:0;">
           <div class="media-dropzone-icon">🖽</div>
           <div class="media-dropzone-text">
