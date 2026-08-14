@@ -507,7 +507,6 @@
     font-weight: 600;
     text-align: left;
     cursor: pointer;
-    letter-spacing: 0.3px;
   }
   .jour-picker button:hover { background: rgba(197,150,58,0.2); color: var(--gold); }
 
@@ -939,7 +938,7 @@
   <div class="topbar-right">
     <div style="position:relative;display:inline-block;">
     <button class="btn btn-outline" onclick="toggleJourPicker(event)">+ Séance ▾</button>
-    <div class="jour-picker" id="jour-picker-header" style="display:none;">
+    <div class="jour-picker" id="jour-picker-hdr" style="display:none;">
       <button onclick="addSeanceJour('Lundi')">Lundi</button>
       <button onclick="addSeanceJour('Mardi')">Mardi</button>
       <button onclick="addSeanceJour('Mercredi')">Mercredi</button>
@@ -2694,7 +2693,7 @@ function renderTabs() {
     </button>
   `).join('') + `<div style="position:relative;display:inline-block;">
     <button class="tab" style="color:var(--gold);" onclick="toggleJourPicker(event)">+ Séance ▾</button>
-    <div class="jour-picker" id="jour-picker" style="display:none;">
+    <div class="jour-picker" id="jour-picker-tabs" style="display:none;">
       ${['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'].map(j =>
         `<button onclick="addSeanceJour('${j}')">${j}</button>`
       ).join('')}
@@ -3027,8 +3026,7 @@ function toggleJourPicker(e) {
   const anyOpen = Array.from(pickers).some(p => p.style.display !== 'none');
   pickers.forEach(p => p.style.display = 'none');
   if (!anyOpen) {
-    // Ouvrir le picker le plus proche du bouton cliqué
-    const picker = e.target.closest('div').querySelector('.jour-picker');
+    const picker = e.currentTarget.closest('div').querySelector('.jour-picker');
     if (picker) picker.style.display = 'block';
   }
 }
@@ -3190,14 +3188,12 @@ async function exportPPTX() {
           cx += col.w;
         });
 
-        // Numéro bloc en haut à droite
+        // Numéro de bloc
         sp.addText(`Bloc ${bi+1} / ${seance.blocs.length}`, { x:11.5, y:1.1, w:1.7, h:0.25, fontSize:9, color:C.midGray, fontFace:"Calibri", align:"right", italic:true });
 
         const rowStartY = headerY + 0.38;
-        const availH = 5.3;
-        const rowH = availH;
+        const rowH = 5.3;
 
-        // Fond de ligne
         sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:rowStartY, w:12.93, h:rowH, fill:{color:C.white}, line:{color:C.lightGray,width:0.5} });
         sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:rowStartY, w:0.07, h:rowH, fill:{color:C.gold}, line:{color:C.gold} });
 
