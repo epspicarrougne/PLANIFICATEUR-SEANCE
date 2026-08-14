@@ -3161,7 +3161,7 @@ async function exportPPTX() {
     }
     addFooter(s1);
 
-    // SLIDES SÉANCES : une slide par séance, 5 colonnes
+    // SLIDES SÉANCES : une slide par séance, sous-lignes par atelier
     for (const seance of seances) {
       const heures = calcHeures(seance);
       const totalMin = seance.blocs.reduce((a,b)=>a+getBlocDuree(b)+(b.recuperationMin||0),0);
@@ -3173,22 +3173,29 @@ async function exportPPTX() {
       sp.background = { color: C.offWhite };
       addHeader(sp, seance.titre, seance.jour, horaireStr);
 
-      const nBlocs = seance.blocs.length;
       const tableX = 0.15;
       const headerY = 1.28;
-      const headerH = 0.38;
+      const headerH = 0.36;
       const tableW = 12.93;
-      const availH = 5.55;
-      const rowH = availH / nBlocs;
+      const availH = 5.57;
 
-      // 5 colonnes : Heure | Situation | Ateliers | Coachs & Missions | Média
+      // Colonnes
       const COLS = [
-        { label: "HEURE",             w: 0.85 },
-        { label: "SITUATION · DURÉE", w: 1.80 },
-        { label: "ATELIERS",          w: 3.90 },
-        { label: "COACHS & MISSIONS", w: 3.90 },
+        { label: "HEURE",             w: 0.82 },
+        { label: "SITUATION · DURÉE", w: 1.72 },
+        { label: "ATELIERS",          w: 3.60 },
+        { label: "COACHS & MISSIONS", w: 4.31 },
         { label: "MÉDIA",             w: 2.48 },
       ];
+
+      // Compter le nombre total de lignes (max(1, nb ateliers) par bloc)
+      const rows = seance.blocs.map(b => {
+        const n = (b.ateliers||[]).filter(a => (typeof a === 'string' ? a : a.texte)).length;
+        return Math.max(1, n);
+      });
+      const totalRows = rows.reduce((a,b) => a+b, 0);
+      const subH = availH / totalRows;
+      const fs = totalRows <= 6 ? 10 : totalRows <= 10 ? 9 : 8;
 
       // En-têtes colonnes
       let cx = tableX;
@@ -3199,80 +3206,97 @@ async function exportPPTX() {
       });
 
       const rowStartY = headerY + headerH;
-      const fs = nBlocs <= 4 ? 10 : nBlocs <= 7 ? 9 : 8;
+      let curY = rowStartY;
 
       seance.blocs.forEach((bloc, bi) => {
-        const ry = rowStartY + bi * rowH;
+        const nSubRows = rows[bi];
+        const blocH = nSubRows * subH;
         const rowBg = bi % 2 === 0 ? C.white : "EEF2FB";
-        let colX = tableX;
+        const ateliers = (bloc.ateliers||[]).map(a => typeof a === 'string' ? {texte:a,coaches:[]} : a).filter(a => a.texte);
 
-        // Fond ligne + bande dorée
-        sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:ry, w:tableW, h:rowH, fill:{color:rowBg}, line:{color:C.lightGray,width:0.3} });
-        sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:ry, w:0.05, h:rowH, fill:{color:C.gold}, line:{color:C.gold} });
+        // Fond du bloc entier
+        sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:curY, w:tableW, h:blocH, fill:{color:rowBg}, line:{color:C.lightGray,width:0.3} });
+        // Bande dorée gauche
+        sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:curY, w:0.05, h:blocH, fill:{color:C.gold}, line:{color:C.gold} });
 
-        // Col 1 — HEURE
+        // Col 1 — HEURE (centré sur toute la hauteur du bloc)
         const blocDuree = getBlocDuree(bloc);
         const recup = bloc.recuperationMin || 0;
-        sp.addText([
-          {text: heures[bi], options:{bold:true, fontSize:fs+1, color:C.navy, breakLine:true}},
-          {text: `${blocDuree}min`, options:{fontSize:fs-1, color:C.navyLight}},
-          ...(recup > 0 ? [{text: ` +${recup}'`, options:{fontSize:fs-2, color:C.green, italic:true}}] : [])
-        ], { x:colX+0.07, y:ry, w:COLS[0].w-0.07, h:rowH, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
-        colX += COLS[0].w;
-
-        // Col 2 — SITUATION
         const rotTxt = bloc.rotation ? ' ↻' : '';
-        sp.addText(bloc.situation + rotTxt, { x:colX, y:ry, w:COLS[1].w, h:rowH, fontSize:fs, bold:true, color:C.navyDark, fontFace:"Calibri", align:"center", valign:"middle", margin:[0,0.06,0,0.06] });
-        colX += COLS[1].w;
+        sp.addText([
+          {text: heures[bi], options:{bold:true, fontSize:fs+2, color:C.navy, breakLine:true}},
+          {text: `${blocDuree}min${rotTxt}`, options:{fontSize:fs-1, color:C.navyLight, breakLine: recup > 0}},
+          ...(recup > 0 ? [{text: `+${recup}' récup`, options:{fontSize:fs-2, color:C.green, italic:true}}] : [])
+        ], { x:tableX+0.07, y:curY, w:COLS[0].w-0.07, h:blocH, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
 
-        // Col 3 — ATELIERS
-        const ateliers = (bloc.ateliers||[]).map(a => typeof a === 'string' ? {texte:a,coaches:[]} : a).filter(a => a.texte);
-        const atelierItems = ateliers.flatMap((a, ai, arr) => {
-          const dureeStr = bloc.rotation && a.dureeAtelier ? ` (${a.dureeAtelier}')` : '';
-          return [
-            {text: `• `, options:{bold:true, color:C.gold, fontSize:fs}},
-            {text: `${a.texte}${dureeStr}`, options:{color:"222222", fontSize:fs}},
-            ...(ai < arr.length-1 ? [{text:'', options:{breakLine:true}}] : [])
-          ];
-        });
-        if (atelierItems.length === 0) atelierItems.push({text:"—", options:{color:C.midGray, fontSize:fs}});
-        sp.addText(atelierItems, { x:colX, y:ry, w:COLS[2].w, h:rowH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.08,0,0.08] });
-        colX += COLS[2].w;
+        // Col 2 — SITUATION (centrée sur toute la hauteur du bloc)
+        sp.addText(bloc.situation, { x:tableX+COLS[0].w, y:curY, w:COLS[1].w, h:blocH, fontSize:fs, bold:true, color:C.navyDark, fontFace:"Calibri", align:"center", valign:"middle", margin:[0,0.05,0,0.05] });
 
-        // Col 4 — COACHS & MISSIONS (par atelier)
-        const coachItems = ateliers.flatMap((a, ai, arr) => {
-          const coaches = (a.coaches||[]);
-          if (coaches.length === 0) return [];
-          const lines = coaches.flatMap(c => {
-            const mission = a.coachMissions && a.coachMissions[c] ? ` : ${a.coachMissions[c]}` : '';
-            return [
-              {text: c, options:{bold:true, color:C.navyLight, fontSize:fs}},
-              ...(mission ? [{text: mission, options:{color:"444444", fontSize:fs-1, italic:true}}] : []),
-              {text: '', options:{breakLine:true}}
-            ];
-          });
-          if (ai < arr.length-1 && (ateliers[ai+1]&&(ateliers[ai+1].coaches||[]).length>0)) {
-            lines.push({text: '·  ·  ·', options:{color:"CCCCCC", fontSize:fs-3, breakLine:true}});
-          }
-          return lines;
-        });
-        if (coachItems.length === 0) coachItems.push({text:"—", options:{color:C.midGray, fontSize:fs}});
-        sp.addText(coachItems, { x:colX, y:ry, w:COLS[3].w, h:rowH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.08,0,0.08] });
-        colX += COLS[3].w;
+        // Séparateur vertical situation/ateliers
+        sp.addShape(pres.shapes.RECTANGLE, { x:tableX+COLS[0].w+COLS[1].w-0.02, y:curY, w:0.02, h:blocH, fill:{color:C.lightGray}, line:{color:C.lightGray} });
 
-        // Col 5 — MÉDIA
+        // Col 5 — MÉDIA (une seule image par bloc, centrée sur toute la hauteur)
+        const mediaColX = tableX + COLS[0].w + COLS[1].w + COLS[2].w + COLS[3].w;
         const key = `${seances.indexOf(seance)}-${bi}`;
         const media = mediaStore[key];
         if (media && media.type === 'image' && media.data) {
-          const imgPad = 0.06;
-          const imgW = COLS[4].w - imgPad * 2;
-          const imgH = rowH - imgPad * 2;
-          sp.addImage({ data: media.data, x: colX+imgPad, y: ry+imgPad, w: imgW, h: imgH, sizing:{type:'contain',w:imgW,h:imgH} });
+          const imgPad = 0.08;
+          const maxW = COLS[4].w - imgPad * 2;
+          const maxH = blocH - imgPad * 2;
+          const ratio = 4/3;
+          let iW = maxW, iH = maxW / ratio;
+          if (iH > maxH) { iH = maxH; iW = maxH * ratio; }
+          const iX = mediaColX + imgPad + (maxW - iW) / 2;
+          const iY = curY + imgPad + (maxH - iH) / 2;
+          sp.addImage({ data: media.data, x: iX, y: iY, w: iW, h: iH });
         } else if (media && media.type === 'url') {
-          sp.addText('🔗 ' + (media.name||'Vidéo'), { x:colX, y:ry, w:COLS[4].w, h:rowH, fontSize:fs-2, color:C.navyLight, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
+          sp.addText('🔗 Vidéo', { x:mediaColX, y:curY, w:COLS[4].w, h:blocH, fontSize:fs-1, color:C.navyLight, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
         } else {
-          sp.addShape(pres.shapes.RECTANGLE, { x:colX+0.1, y:ry+0.1, w:COLS[4].w-0.2, h:rowH-0.2, fill:{color:"F5F5F5"}, line:{color:"DDDDDD",width:0.3} });
+          sp.addShape(pres.shapes.RECTANGLE, { x:mediaColX+0.1, y:curY+0.06, w:COLS[4].w-0.2, h:blocH-0.12, fill:{color:"F0F0F0"}, line:{color:"DDDDDD",width:0.3} });
         }
+
+        // Cols 3 & 4 — Sous-lignes par atelier
+        const atelierColX = tableX + COLS[0].w + COLS[1].w;
+        const coachColX = atelierColX + COLS[2].w;
+
+        if (ateliers.length === 0) {
+          // Pas d'atelier : ligne vide
+          sp.addText("—", { x:atelierColX, y:curY, w:COLS[2].w, h:subH, fontSize:fs, color:C.midGray, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
+        } else {
+          ateliers.forEach((a, ai) => {
+            const subY = curY + ai * subH;
+            const dureeStr = bloc.rotation && a.dureeAtelier ? ` (${a.dureeAtelier}')` : '';
+
+            // Séparateur horizontal entre ateliers (sauf le premier)
+            if (ai > 0) {
+              sp.addShape(pres.shapes.RECTANGLE, { x:atelierColX, y:subY, w:COLS[2].w+COLS[3].w, h:0.02, fill:{color:"E0E8F0"}, line:{color:"E0E8F0"} });
+            }
+
+            // Atelier
+            sp.addText([
+              {text: `A${ai+1}  `, options:{bold:true, color:C.gold, fontSize:fs-1}},
+              {text: `${a.texte}${dureeStr}`, options:{color:"222222", fontSize:fs}}
+            ], { x:atelierColX+0.06, y:subY, w:COLS[2].w-0.08, h:subH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.04,0,0.04] });
+
+            // Coachs & missions liés à cet atelier
+            const coaches = (a.coaches||[]);
+            if (coaches.length > 0) {
+              const coachItems = coaches.flatMap((c, ci) => {
+                const mission = a.coachMissions && a.coachMissions[c] ? ` : ${a.coachMissions[c]}` : '';
+                return [
+                  {text: c, options:{bold:true, color:C.navyLight, fontSize:fs}},
+                  ...(mission ? [{text: mission, options:{color:"444444", fontSize:fs-1, italic:true}}] : []),
+                  ...(ci < coaches.length-1 ? [{text:'  |  ', options:{color:"CCCCCC", fontSize:fs-2}}] : [])
+                ];
+              });
+              sp.addText(coachItems, { x:coachColX+0.06, y:subY, w:COLS[3].w-0.08, h:subH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.04,0,0.04] });
+            } else {
+              sp.addText("—", { x:coachColX, y:subY, w:COLS[3].w, h:subH, fontSize:fs-1, color:C.midGray, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
+            }
+          });
+        }
+
+        curY += blocH;
       });
 
       addFooter(sp);
@@ -3285,15 +3309,8 @@ async function exportPPTX() {
           const imgSlide = pres.addSlide();
           imgSlide.background = { color: C.offWhite };
           addHeader(imgSlide, seance.titre + ' – ' + bloc.situation, seance.jour, horaireStr);
-          imgSlide.addImage({
-            data: media.data,
-            x: 1.5, y: 1.2, w: 10.33, h: 5.4,
-            sizing: { type: 'contain', w: 10.33, h: 5.4 }
-          });
-          imgSlide.addText(bloc.situation, {
-            x: 0.2, y: 6.8, w: 12.93, h: 0.4,
-            fontSize: 11, color: C.midGray, fontFace: 'Calibri', align: 'center', valign: 'middle', margin: 0
-          });
+          imgSlide.addImage({ data: media.data, x: 1.5, y: 1.2, w: 10.33, h: 5.4 });
+          imgSlide.addText(bloc.situation, { x: 0.2, y: 6.8, w: 12.93, h: 0.4, fontSize: 11, color: C.midGray, fontFace: 'Calibri', align: 'center', valign: 'middle', margin: 0 });
           addFooter(imgSlide);
         }
       });
