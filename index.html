@@ -3169,6 +3169,14 @@ async function exportPPTX() {
       const heureFin = minutesToTime(heureFinMin);
       const horaireStr = `${seance.heureDebut.replace(':','h')} → ${heureFin}`;
 
+      // Filtrer les coaches présents dans cette séance
+      const coachesPresents = new Set();
+      seance.blocs.forEach(b => {
+        (b.ateliers||[]).forEach(a => {
+          (a.coaches||[]).forEach(c => coachesPresents.add(c));
+        });
+      });
+
       const sp = pres.addSlide();
       sp.background = { color: C.offWhite };
       addHeader(sp, seance.titre, seance.jour, horaireStr);
@@ -3179,7 +3187,6 @@ async function exportPPTX() {
       const tableW = 12.93;
       const availH = 5.57;
 
-      // Colonnes
       const COLS = [
         { label: "HEURE",             w: 0.82 },
         { label: "SITUATION · DURÉE", w: 1.72 },
@@ -3188,7 +3195,7 @@ async function exportPPTX() {
         { label: "MÉDIA",             w: 2.48 },
       ];
 
-      // Compter le nombre total de lignes (max(1, nb ateliers) par bloc)
+      // Nombre de sous-lignes par bloc = max(1, nb ateliers)
       const rows = seance.blocs.map(b => {
         const n = (b.ateliers||[]).filter(a => (typeof a === 'string' ? a : a.texte)).length;
         return Math.max(1, n);
@@ -3197,10 +3204,10 @@ async function exportPPTX() {
       const subH = availH / totalRows;
       const fs = totalRows <= 6 ? 10 : totalRows <= 10 ? 9 : 8;
 
-      // En-têtes colonnes
+      // En-têtes colonnes avec séparateurs visibles
       let cx = tableX;
-      COLS.forEach(col => {
-        sp.addShape(pres.shapes.RECTANGLE, { x:cx, y:headerY, w:col.w, h:headerH, fill:{color:C.navy}, line:{color:C.navyDark,width:0.5} });
+      COLS.forEach((col, ci) => {
+        sp.addShape(pres.shapes.RECTANGLE, { x:cx, y:headerY, w:col.w, h:headerH, fill:{color:C.navy}, line:{color:"1a2b6b",width:1.5} });
         sp.addText(col.label, { x:cx, y:headerY, w:col.w, h:headerH, fontSize:8, bold:true, color:C.white, fontFace:"Calibri", align:"center", valign:"middle", margin:0, charSpacing:0.5 });
         cx += col.w;
       });
@@ -3214,12 +3221,19 @@ async function exportPPTX() {
         const rowBg = bi % 2 === 0 ? C.white : "EEF2FB";
         const ateliers = (bloc.ateliers||[]).map(a => typeof a === 'string' ? {texte:a,coaches:[]} : a).filter(a => a.texte);
 
-        // Fond du bloc entier
-        sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:curY, w:tableW, h:blocH, fill:{color:rowBg}, line:{color:C.lightGray,width:0.3} });
+        // Fond du bloc + bordure extérieure bien visible
+        sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:curY, w:tableW, h:blocH, fill:{color:rowBg}, line:{color:"BBBBBB",width:1.0} });
         // Bande dorée gauche
         sp.addShape(pres.shapes.RECTANGLE, { x:tableX, y:curY, w:0.05, h:blocH, fill:{color:C.gold}, line:{color:C.gold} });
 
-        // Col 1 — HEURE (centré sur toute la hauteur du bloc)
+        // Séparateurs verticaux entre colonnes (trait gris foncé visible)
+        let sepX = tableX + COLS[0].w;
+        for (let ci = 1; ci < COLS.length; ci++) {
+          sp.addShape(pres.shapes.RECTANGLE, { x:sepX-0.015, y:curY, w:0.03, h:blocH, fill:{color:"AAAAAA"}, line:{color:"AAAAAA"} });
+          sepX += COLS[ci].w;
+        }
+
+        // Col 1 — HEURE
         const blocDuree = getBlocDuree(bloc);
         const recup = bloc.recuperationMin || 0;
         const rotTxt = bloc.rotation ? ' ↻' : '';
@@ -3229,13 +3243,10 @@ async function exportPPTX() {
           ...(recup > 0 ? [{text: `+${recup}' récup`, options:{fontSize:fs-2, color:C.green, italic:true}}] : [])
         ], { x:tableX+0.07, y:curY, w:COLS[0].w-0.07, h:blocH, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
 
-        // Col 2 — SITUATION (centrée sur toute la hauteur du bloc)
+        // Col 2 — SITUATION
         sp.addText(bloc.situation, { x:tableX+COLS[0].w, y:curY, w:COLS[1].w, h:blocH, fontSize:fs, bold:true, color:C.navyDark, fontFace:"Calibri", align:"center", valign:"middle", margin:[0,0.05,0,0.05] });
 
-        // Séparateur vertical situation/ateliers
-        sp.addShape(pres.shapes.RECTANGLE, { x:tableX+COLS[0].w+COLS[1].w-0.02, y:curY, w:0.02, h:blocH, fill:{color:C.lightGray}, line:{color:C.lightGray} });
-
-        // Col 5 — MÉDIA (une seule image par bloc, centrée sur toute la hauteur)
+        // Col 5 — MÉDIA (une image par bloc)
         const mediaColX = tableX + COLS[0].w + COLS[1].w + COLS[2].w + COLS[3].w;
         const key = `${seances.indexOf(seance)}-${bi}`;
         const media = mediaStore[key];
@@ -3251,8 +3262,6 @@ async function exportPPTX() {
           sp.addImage({ data: media.data, x: iX, y: iY, w: iW, h: iH });
         } else if (media && media.type === 'url') {
           sp.addText('🔗 Vidéo', { x:mediaColX, y:curY, w:COLS[4].w, h:blocH, fontSize:fs-1, color:C.navyLight, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
-        } else {
-          sp.addShape(pres.shapes.RECTANGLE, { x:mediaColX+0.1, y:curY+0.06, w:COLS[4].w-0.2, h:blocH-0.12, fill:{color:"F0F0F0"}, line:{color:"DDDDDD",width:0.3} });
         }
 
         // Cols 3 & 4 — Sous-lignes par atelier
@@ -3260,33 +3269,32 @@ async function exportPPTX() {
         const coachColX = atelierColX + COLS[2].w;
 
         if (ateliers.length === 0) {
-          // Pas d'atelier : ligne vide
           sp.addText("—", { x:atelierColX, y:curY, w:COLS[2].w, h:subH, fontSize:fs, color:C.midGray, fontFace:"Calibri", align:"center", valign:"middle", margin:0 });
         } else {
           ateliers.forEach((a, ai) => {
             const subY = curY + ai * subH;
             const dureeStr = bloc.rotation && a.dureeAtelier ? ` (${a.dureeAtelier}')` : '';
 
-            // Séparateur horizontal entre ateliers (sauf le premier)
+            // Séparateur horizontal entre ateliers
             if (ai > 0) {
-              sp.addShape(pres.shapes.RECTANGLE, { x:atelierColX, y:subY, w:COLS[2].w+COLS[3].w, h:0.02, fill:{color:"E0E8F0"}, line:{color:"E0E8F0"} });
+              sp.addShape(pres.shapes.RECTANGLE, { x:atelierColX, y:subY, w:COLS[2].w+COLS[3].w, h:0.025, fill:{color:"CCDDEE"}, line:{color:"CCDDEE"} });
             }
 
-            // Atelier
+            // Col 3 — Atelier
             sp.addText([
-              {text: `A${ai+1}  `, options:{bold:true, color:C.gold, fontSize:fs-1}},
+              {text: `A${ai+1} `, options:{bold:true, color:C.gold, fontSize:fs-1}},
               {text: `${a.texte}${dureeStr}`, options:{color:"222222", fontSize:fs}}
             ], { x:atelierColX+0.06, y:subY, w:COLS[2].w-0.08, h:subH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.04,0,0.04] });
 
-            // Coachs & missions liés à cet atelier
-            const coaches = (a.coaches||[]);
+            // Col 4 — Coachs présents liés à cet atelier (filtrés)
+            const coaches = (a.coaches||[]).filter(c => coachesPresents.has(c));
             if (coaches.length > 0) {
               const coachItems = coaches.flatMap((c, ci) => {
                 const mission = a.coachMissions && a.coachMissions[c] ? ` : ${a.coachMissions[c]}` : '';
                 return [
                   {text: c, options:{bold:true, color:C.navyLight, fontSize:fs}},
-                  ...(mission ? [{text: mission, options:{color:"444444", fontSize:fs-1, italic:true}}] : []),
-                  ...(ci < coaches.length-1 ? [{text:'  |  ', options:{color:"CCCCCC", fontSize:fs-2}}] : [])
+                  ...(mission ? [{text: mission, options:{color:"333333", fontSize:fs-1, italic:true}}] : []),
+                  ...(ci < coaches.length-1 ? [{text:'  |  ', options:{color:"BBBBBB", fontSize:fs-2}}] : [])
                 ];
               });
               sp.addText(coachItems, { x:coachColX+0.06, y:subY, w:COLS[3].w-0.08, h:subH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.04,0,0.04] });
@@ -3315,7 +3323,7 @@ async function exportPPTX() {
         }
       });
 
-            // Slide groupes
+                  // Slide groupes
       if (seance.groupes) {
         const sg = pres.addSlide();
         sg.background = { color: C.offWhite };
