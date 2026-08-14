@@ -3238,7 +3238,6 @@ async function exportPPTX() {
         const key = `${seances.indexOf(seance)}-${bi}`;
         const media = mediaStore[key];
         if (media && media.type === 'image' && media.data) {
-          // Place image in a dedicated zone — add an extra image slide
           const imgSlide = pres.addSlide();
           imgSlide.background = { color: C.offWhite };
           addHeader(imgSlide, seance.titre + ' – ' + bloc.situation, seance.jour, horaireStr);
@@ -3254,8 +3253,6 @@ async function exportPPTX() {
           addFooter(imgSlide);
         }
       });
-
-      addFooter(sp);
 
       // Slide groupes
       if (seance.groupes) {
