@@ -2847,6 +2847,10 @@ function renderBloc(s, seanceIdx, b, bi, heure) {
       <div class="bloc-actions">
         ${bi > 0 ? `<button class="btn btn-sm btn-navy" onclick="moveBloc(${seanceIdx},${bi},-1)" title="Monter">↑</button>` : ''}
         ${bi < s.blocs.length-1 ? `<button class="btn btn-sm btn-navy" onclick="moveBloc(${seanceIdx},${bi},1)" title="Descendre">↓</button>` : ''}
+        <label class="btn-file-action" title="Choisir image ou vidéo" style="display:none;align-items:center;justify-content:center;gap:6px;padding:4px 8px;border-radius:4px;cursor:pointer;background:var(--gold);color:var(--navy-dark);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;white-space:nowrap;">
+          📁 Fichier
+          <input type="file" accept="image/*,video/*" onchange="handleFileUploadDirect(event,${seanceIdx},${bi})" style="display:none;">
+        </label>
         <button class="btn btn-sm btn-danger" onclick="deleteBloc(${seanceIdx},${bi})" title="Supprimer">🗑</button>
       </div>
     </div>
@@ -3247,15 +3251,21 @@ function openMediaPanel(si, bi) {
   // Open panel
   document.getElementById('app-layout').classList.add('media-open');
 
-  // Highlight active row
+  // Masquer tous les boutons fichier, puis montrer celui du bloc actif
+  document.querySelectorAll('.btn-file-action').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.bloc-row').forEach(r => r.classList.remove('bloc-media-active'));
   const row = document.getElementById(`bloc-${si}-${bi}`);
-  if (row) row.classList.add('bloc-media-active');
+  if (row) {
+    row.classList.add('bloc-media-active');
+    const fileBtn = row.querySelector('.btn-file-action');
+    if (fileBtn) fileBtn.style.display = 'flex';
+  }
 }
 
 function closeMediaPanel() {
   document.getElementById('app-layout').classList.remove('media-open');
   document.querySelectorAll('.bloc-row').forEach(r => r.classList.remove('bloc-media-active'));
+  document.querySelectorAll('.btn-file-action').forEach(el => el.style.display = 'none');
   activeBlocKey = null;
   document.getElementById('mp-url-input').value = '';
 }
@@ -3347,6 +3357,22 @@ function refreshMediaPanel() {
     dropzone.style.display = 'block';
     removeWrap.style.display = 'none';
   }
+}
+
+function handleFileUploadDirect(event, si, bi) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const key = mediaKey(si, bi);
+  const reader = new FileReader();
+  reader.onload = e => {
+    const isVideo = file.type.startsWith('video/');
+    mediaStore[key] = { type: isVideo ? 'video' : 'image', data: e.target.result, name: file.name, size: file.size };
+    renderSeance();
+    scheduleSave();
+    refreshMediaPanel();
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
 }
 
 function handleFileUpload(event) {
