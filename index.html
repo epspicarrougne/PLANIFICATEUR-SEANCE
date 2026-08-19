@@ -3169,11 +3169,12 @@ async function exportPPTX() {
       const heureFin = minutesToTime(heureFinMin);
       const horaireStr = `${seance.heureDebut.replace(':','h')} → ${heureFin}`;
 
-      // Filtrer les coaches présents dans cette séance
+      // Filtrer : seulement les coachs encore dans la liste globale ET assignés à la séance
+      const coachesActifs = new Set(coaches); // liste globale courante
       const coachesPresents = new Set();
       seance.blocs.forEach(b => {
         (b.ateliers||[]).forEach(a => {
-          (a.coaches||[]).forEach(c => coachesPresents.add(c));
+          (a.coaches||[]).filter(c => coachesActifs.has(c)).forEach(c => coachesPresents.add(c));
         });
       });
 
@@ -3287,7 +3288,7 @@ async function exportPPTX() {
             ], { x:atelierColX+0.06, y:subY, w:COLS[2].w-0.08, h:subH, fontFace:"Calibri", align:"left", valign:"middle", margin:[0,0.04,0,0.04] });
 
             // Col 4 — Coachs présents liés à cet atelier (filtrés)
-            const coaches = (a.coaches||[]).filter(c => coachesPresents.has(c));
+            const coaches = (a.coaches||[]).filter(c => coachesActifs.has(c) && coachesPresents.has(c));
             if (coaches.length > 0) {
               const coachItems = coaches.flatMap((c, ci) => {
                 const mission = a.coachMissions && a.coachMissions[c] ? ` : ${a.coachMissions[c]}` : '';
