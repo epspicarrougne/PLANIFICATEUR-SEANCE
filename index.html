@@ -988,6 +988,16 @@ Mettre du plaquage</textarea>
     <!-- Coachs disponibles -->
     <div class="sidebar-section">
       <div class="sidebar-label">Coachs disponibles</div>
+      <!-- Sélection rapide par équipe -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:10px;font-weight:700;color:var(--mid-gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Charger une équipe :</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          <button class="btn btn-sm btn-navy" onclick="chargerEquipe('F-15')" style="font-size:10px;padding:3px 7px;">F-15</button>
+          <button class="btn btn-sm btn-navy" onclick="chargerEquipe('F-18 Agen Agglo')" style="font-size:10px;padding:3px 7px;">F-18 Agglo</button>
+          <button class="btn btn-sm btn-navy" onclick="chargerEquipe('F-18 Élite')" style="font-size:10px;padding:3px 7px;">F-18 Élite</button>
+          <button class="btn btn-sm btn-navy" onclick="chargerEquipe('Seniors')" style="font-size:10px;padding:3px 7px;">Seniors</button>
+        </div>
+      </div>
       <div id="coach-list-sidebar" class="coach-grid">
     <div class="coach-chip" style="display:flex;align-items:center;gap:4px;cursor:default;">
       <span style="flex:1;">Thomas</span>
@@ -2663,6 +2673,47 @@ function renderCoachSidebar() {
     </div>
   `).join('');
 }
+// Équipes prédéfinies
+const EQUIPES = {
+  'F-15': ['Emma', 'Nicolas', 'Christophe'],
+  'F-18 Agen Agglo': ['Jean-Christophe', 'Franck', 'Fabien', 'Laura', 'Lola', 'Stéphane'],
+  'F-18 Élite': ['Thomas', 'Enzo', 'Damien', 'Jean-Luc', 'Benoît', 'Alex', 'Téo', 'Thierry'],
+  'Seniors': ['Joris', 'Michael', 'Colin']
+};
+
+function chargerEquipe(nom) {
+  const equipe = EQUIPES[nom];
+  if (!equipe) return;
+  if (coaches.length > 0) {
+    if (!confirm(`Remplacer les coachs actuels par l'équipe ${nom} ?`)) return;
+  }
+  coaches = [...equipe];
+  renderCoachSidebar();
+  render();
+  scheduleSave();
+}
+
+// Situations personnalisées (mémorisées entre sessions)
+let situationsCustom = JSON.parse(localStorage.getItem('sua_situations') || '[]');
+
+function addSituationToList(val) {
+  const v = val.trim();
+  const permanentes = ['Éveil','Échauffement','Préparation physique','Collectif de ligne','Effectif réduit','Effectif total','Boîte à outils','Spé au poste','Vidéo'];
+  if (v && !permanentes.includes(v) && !situationsCustom.includes(v)) {
+    situationsCustom.push(v);
+    localStorage.setItem('sua_situations', JSON.stringify(situationsCustom));
+    updateSituationsDatalist();
+  }
+}
+
+function updateSituationsDatalist() {
+  const dl = document.getElementById('situations-datalist');
+  if (!dl) return;
+  const permanentes = ['Éveil','Échauffement','Préparation physique','Collectif de ligne','Effectif réduit','Effectif total','Boîte à outils','Spé au poste','Vidéo'];
+  const toutes = [...permanentes, ...situationsCustom];
+  dl.innerHTML = toutes.map(s => `<option value="${s}">`).join('');
+}
+
 function addCoach() {
   const inp = document.getElementById('new-coach-name');
   const name = inp.value.trim();
@@ -2843,9 +2894,9 @@ function renderBloc(s, seanceIdx, b, bi, heure) {
       <div>
         <div class="atelier-row" style="margin-bottom:6px;">
           <span class="atelier-label" style="color:var(--navy-light);">Situation</span>
-          <input type="text" value="${(b.situation||'').replace(/"/g,'&quot;')}"
+          <input type="text" list="situations-datalist" value="${(b.situation||'').replace(/"/g,'&quot;')}"
             style="flex:1; font-size:12px; padding:5px 8px; font-weight:700;"
-            oninput="seances[${seanceIdx}].blocs[${bi}].situation=this.value;">
+            oninput="seances[${seanceIdx}].blocs[${bi}].situation=this.value; addSituationToList(this.value);">
         </div>
         <div class="atelier-row" style="margin-bottom:4px;">
           <span class="atelier-label" style="color:var(--navy-light);">Durée</span>
@@ -3714,6 +3765,9 @@ render();
 // 3. Appliquer les champs texte semaine (après que le DOM existe)
 applySemaineFields(_savedSemaine);
 
+// 3b. Initialiser les suggestions de situations
+updateSituationsDatalist();
+
 // 4. Auto-save sur les champs semaine
 ['s-numero','s-theme','s-staff','s-points','s-divers'].forEach(id => {
   const el = document.getElementById(id);
@@ -3721,6 +3775,18 @@ applySemaineFields(_savedSemaine);
 });
 
 </script><datalist id="joueuses-datalist"><option value="Alana"></option><option value="Alicia"></option><option value="Aliénor"></option><option value="Anwen"></option><option value="Appoline"></option><option value="Chloé"></option><option value="Clea"></option><option value="Cléa"></option><option value="Elina"></option><option value="Elisa"></option><option value="Eloa"></option><option value="Emma"></option><option value="Eva"></option><option value="Evi"></option><option value="Jenyfer"></option><option value="Juliette"></option><option value="Keyla"></option><option value="Lana"></option><option value="Lena"></option><option value="Lise"></option><option value="Louna"></option><option value="Luna"></option><option value="Madeline"></option><option value="Maeva"></option><option value="Manon"></option><option value="Margot"></option><option value="Marine"></option><option value="Mayra"></option><option value="Mélina"></option><option value="Mia"></option><option value="Nina"></option><option value="Ninon"></option><option value="Noémie"></option><option value="Perrine"></option><option value="Philomène"></option><option value="Salomé"></option><option value="Typhaine"></option></datalist>
+
+<datalist id="situations-datalist">
+  <option value="Éveil">
+  <option value="Échauffement">
+  <option value="Préparation physique">
+  <option value="Collectif de ligne">
+  <option value="Effectif réduit">
+  <option value="Effectif total">
+  <option value="Boîte à outils">
+  <option value="Spé au poste">
+  <option value="Vidéo">
+</datalist>
 
 
 </body></html>
