@@ -483,6 +483,39 @@
     font-family: 'Barlow', sans-serif;
   }
   .atelier-coach-chip:hover { border-color: var(--gold); color: var(--gold); }
+  .equipe-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--navy-dark);
+    border-bottom: 2px solid var(--gold);
+    flex-wrap: wrap;
+  }
+  .equipe-bar .equipe-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+  }
+  .btn-equipe {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(197,150,58,0.4);
+    background: transparent;
+    color: rgba(255,255,255,0.7);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.3px;
+  }
+  .btn-equipe:hover { background: rgba(197,150,58,0.15); color: var(--gold); border-color: var(--gold); }
+  .btn-equipe.active { background: var(--gold); color: var(--navy-dark); border-color: var(--gold); }
+
   .jour-picker {
     position: absolute;
     background: var(--navy-dark);
@@ -1049,6 +1082,15 @@ Mettre du plaquage</textarea>
 
   <!-- MAIN -->
   <div class="main" id="main-content">
+    <!-- Barre sélection équipe -->
+    <div class="equipe-bar" id="equipe-bar">
+      <span class="equipe-label">Équipe :</span>
+      <button class="btn-equipe" onclick="selectionnerEquipe('F-15')">F-15</button>
+      <button class="btn-equipe" onclick="selectionnerEquipe('F-18 Agen Agglo')">F-18 Agglo</button>
+      <button class="btn-equipe" onclick="selectionnerEquipe('F-18 Élite')">F-18 Élite</button>
+      <button class="btn-equipe" onclick="selectionnerEquipe('Seniors')">Seniors</button>
+      <span id="equipe-active-label" style="margin-left:8px;font-size:11px;color:rgba(197,150,58,0.8);font-style:italic;"></span>
+    </div>
     <!-- Tabs -->
     <div class="tabs" id="seance-tabs">
     <button class="tab " onclick="setTab(0)">
@@ -2555,6 +2597,9 @@ document.getElementById('logo-img').src = LOGO_B64;
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let coaches = ["Thomas", "Enzo", "Emma", "Damien", "Salomé", "Paul"];
 let activeSeanceIdx = 0;
+let equipeActive = localStorage.getItem('sua_equipe_active') || null;
+// Stockage des séances par équipe (pour réutilisation)
+let seancesParEquipe = JSON.parse(localStorage.getItem('sua_seances_equipe') || '{}');
 
 // Ateliers sont des objets { texte, coaches[] } pour permettre d'assigner des coachs par atelier
 let seances = [
@@ -2680,6 +2725,54 @@ const EQUIPES = {
   'F-18 Élite': ['Thomas', 'Enzo', 'Damien', 'Jean-Luc', 'Benoît', 'Alex', 'Téo', 'Thierry'],
   'Seniors': ['Joris', 'Michael', 'Colin']
 };
+
+function selectionnerEquipe(nom) {
+  // Sauvegarder les séances actuelles pour l'équipe précédente
+  if (equipeActive && seances.length > 0) {
+    seancesParEquipe[equipeActive] = JSON.parse(JSON.stringify(seances));
+    localStorage.setItem('sua_seances_equipe', JSON.stringify(seancesParEquipe));
+  }
+
+  const ancienneEquipe = equipeActive;
+  equipeActive = nom;
+  localStorage.setItem('sua_equipe_active', nom);
+
+  // Charger les coachs de l'équipe
+  coaches = [...(EQUIPES[nom] || [])];
+
+  // Charger les séances sauvegardées pour cette équipe
+  if (seancesParEquipe[nom] && seancesParEquipe[nom].length > 0) {
+    const seancesSauvegardees = seancesParEquipe[nom];
+    const msg = `Équipe ${nom} — ${seancesSauvegardees.length} séance(s) sauvegardée(s) trouvée(s).
+
+✅ "OK" → Charger les séances de ${nom}
+❌ "Annuler" → Repartir d'une séance vierge`;
+    if (confirm(msg)) {
+      seances = JSON.parse(JSON.stringify(seancesSauvegardees));
+    } else {
+      seances = [{ titre: nom, jour: 'Mercredi', heureDebut: '14:30', blocs: [{ situation: 'Échauffement', dureeMin: 15, ateliers: [{ texte: '', coaches: [] }] }], groupes: null }];
+    }
+  } else {
+    seances = [{ titre: nom, jour: 'Mercredi', heureDebut: '14:30', blocs: [{ situation: 'Échauffement', dureeMin: 15, ateliers: [{ texte: '', coaches: [] }] }], groupes: null }];
+  }
+
+  activeSeanceIdx = 0;
+  updateEquipeBar();
+  renderCoachSidebar();
+  render();
+  scheduleSave();
+}
+
+function updateEquipeBar() {
+  // Mettre à jour les boutons actifs
+  document.querySelectorAll('.btn-equipe').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === equipeActive ||
+      (equipeActive === 'F-18 Agen Agglo' && btn.textContent.trim() === 'F-18 Agglo') ||
+      (equipeActive === 'F-18 Élite' && btn.textContent.trim() === 'F-18 Élite'));
+  });
+  const label = document.getElementById('equipe-active-label');
+  if (label) label.textContent = equipeActive ? `Séances de ${equipeActive}` : '';
+}
 
 function chargerEquipe(nom) {
   const equipe = EQUIPES[nom];
@@ -3673,6 +3766,12 @@ const STORAGE_KEY = 'sua_planificateur_v1';
 function saveToStorage() {
   try {
     const g = id => (document.getElementById(id) || {}).value || '';
+    // Sauvegarder les séances de l'équipe active
+    if (equipeActive && seances.length > 0) {
+      seancesParEquipe[equipeActive] = JSON.parse(JSON.stringify(seances));
+      localStorage.setItem('sua_seances_equipe', JSON.stringify(seancesParEquipe));
+    }
+
     const data = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -3764,6 +3863,9 @@ render();
 
 // 3. Appliquer les champs texte semaine (après que le DOM existe)
 applySemaineFields(_savedSemaine);
+
+// 3a. Initialiser la barre équipe
+updateEquipeBar();
 
 // 3b. Initialiser les suggestions de situations
 updateSituationsDatalist();
